@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import LandingPage from "./LandingPage";
 import {
+  signInWithEmail,
+  signOutFromSupabase,
+  signUpWithEmail,
+  supabase,
+  validateEmail,
+} from "../lib/supabase";
+import {
   LayoutDashboard, Car, BookOpen, Sparkles, BarChart2, Library,
   Bell, Settings, ShoppingBag, Sun, Moon, Mic, Camera, PenLine,
   ChevronRight, Plus, X, Menu, MessageSquare,
@@ -1121,17 +1128,29 @@ function AuthScreen({
   onLogin: (user: AuthUser) => void;
   onBack: () => void;
 }) {
-  const [email, setEmail] = useState("admin@carcontrol.kz");
-  const [password, setPassword] = useState("123456");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const buildUserFromSupabase = (userData: { email?: string | null; user_metadata?: { full_name?: string | null; name?: string | null } | null }) => ({
+    name: userData.user_metadata?.full_name || userData.user_metadata?.name || userData.email?.split("@")[0] || "Пользователь",
+    email: userData.email || "",
+    role: "Пользователь",
+    plan: "Base",
+    avatar: (userData.user_metadata?.full_name || userData.email || "U").slice(0, 2).toUpperCase(),
+  });
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setSuccess("");
 
     const normalizedEmail = email.trim().toLowerCase();
-    const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    const emailIsValid = validateEmail(normalizedEmail);
 
     if (!emailIsValid) {
       setError("Введите корректный email адрес.");
@@ -1143,20 +1162,48 @@ function AuthScreen({
       return;
     }
 
+    if (mode === "register" && fullName.trim().length < 2) {
+      setError("Укажите имя и фамилию для регистрации.");
+      return;
+    }
+
     setLoading(true);
 
-    window.setTimeout(() => {
-      const isValid = normalizedEmail === DEMO_USER.email && password === "123456";
+    try {
+      if (mode === "register") {
+        const { data, error: signUpError } = await signUpWithEmail(normalizedEmail, password, fullName.trim());
 
-      if (!isValid) {
-        setError("Неверный email или пароль. Используйте demo-данные ниже.");
-        setLoading(false);
-        return;
+        if (signUpError) {
+          throw signUpError;
+        }
+
+        if (data.user && data.session) {
+          onLogin(buildUserFromSupabase(data.user));
+          return;
+        }
+
+        setSuccess("Регистрация создана. Проверьте email для подтверждения и затем войдите в аккаунт.");
+        setMode("login");
+        setPassword("");
+      } else {
+        const { data, error: signInError } = await signInWithEmail(normalizedEmail, password);
+
+        if (signInError) {
+          throw signInError;
+        }
+
+        if (!data.user) {
+          throw new Error("Пользователь не найден.");
+        }
+
+        onLogin(buildUserFromSupabase(data.user));
       }
-
-      onLogin(DEMO_USER);
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Не удалось выполнить вход.";
+      setError(message);
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (
@@ -1212,15 +1259,48 @@ function AuthScreen({
           <div className="p-5 sm:p-8 lg:p-10">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Вход</p>
-                <h2 className="mt-2 text-2xl font-black text-foreground">Добро пожаловать</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{mode === "login" ? "Вход" : "Регистрация"}</p>
+                <h2 className="mt-2 text-2xl font-black text-foreground">{mode === "login" ? "Добро пожаловать" : "Создайте аккаунт"}</h2>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <Shield size={20} />
               </div>
             </div>
 
+            <div className="mb-5 inline-flex w-full rounded-xl bg-muted p-1">
+              {(["login", "register"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    setMode(tab);
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className={cn(
+                    "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+                    mode === tab ? "bg-white text-foreground shadow-sm dark:bg-slate-800" : "text-muted-foreground"
+                  )}
+                >
+                  {tab === "login" ? "Войти" : "Регистрация"}
+                </button>
+              ))}
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === "register" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Имя</label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Алексей Иванов"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-foreground">Email</label>
                 <input
@@ -1237,20 +1317,12 @@ function AuthScreen({
                 <label className="text-sm font-semibold text-foreground">Пароль</label>
                 <input
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                   placeholder="••••••••"
                 />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="h-4 w-4 rounded border-border" defaultChecked />
-                  Запомнить меня
-                </label>
-                <button type="button" className="font-semibold text-primary hover:text-primary/80">Забыли пароль?</button>
               </div>
 
               {error && (
@@ -1259,20 +1331,26 @@ function AuthScreen({
                 </div>
               )}
 
+              {success && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+                  {success}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? "Входим…" : "Войти в кабинет"}
+                {loading ? (mode === "login" ? "Входим…" : "Создаём аккаунт…") : mode === "login" ? "Войти в кабинет" : "Создать аккаунт"}
               </button>
             </form>
 
             <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Демо-доступ</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Подключение к Supabase</p>
               <div className="space-y-2 text-sm text-foreground">
-                <p><span className="font-semibold">Email:</span> admin@carcontrol.kz</p>
-                <p><span className="font-semibold">Пароль:</span> 123456</p>
+                <p>После регистрации пользователь создается в Auth и profile.</p>
+                <p>Используется email validation и secure auth flow.</p>
               </div>
             </div>
           </div>
@@ -1356,12 +1434,46 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [screen, setScreen] = useState<"landing" | "auth" | "app">("landing");
 
+  const mapSupabaseUser = (supabaseUser: { email?: string | null; user_metadata?: { full_name?: string | null; name?: string | null } | null }) => ({
+    name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email?.split("@")[0] || "Пользователь",
+    email: supabaseUser.email || "",
+    role: "Пользователь",
+    plan: "Base",
+    avatar: (supabaseUser.user_metadata?.full_name || supabaseUser.email || "U").slice(0, 2).toUpperCase(),
+  });
+
   useEffect(() => {
     const storedUser = getStoredUser();
     if (storedUser) {
       setUser(storedUser);
       setScreen("app");
+      return;
     }
+
+    if (!supabase) {
+      setScreen("auth");
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      const currentUser = data.session?.user;
+      if (currentUser) {
+        setUser(mapSupabaseUser(currentUser));
+        setScreen("app");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(mapSupabaseUser(session.user));
+        setScreen("app");
+      } else {
+        setUser(null);
+        setScreen("landing");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -1375,6 +1487,17 @@ export default function App() {
     }
   }, [user]);
 
+  const handleLogout = async () => {
+    try {
+      await signOutFromSupabase();
+    } catch (error) {
+      console.error("Logout error", error);
+    } finally {
+      setUser(null);
+      setScreen("landing");
+    }
+  };
+
   if (screen === "landing") {
     return <LandingPage onEnterCabinet={() => setScreen("auth")} />;
   }
@@ -1383,5 +1506,5 @@ export default function App() {
     return <AuthScreen onLogin={setUser} onBack={() => setScreen("landing")} />;
   }
 
-  return <AuthenticatedApp user={user as AuthUser} onLogout={() => { setUser(null); setScreen("landing"); }} />;
+  return <AuthenticatedApp user={user as AuthUser} onLogout={handleLogout} />;
 }
