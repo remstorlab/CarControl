@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard, Car, BookOpen, Sparkles, BarChart2, Library,
   Bell, Settings, ShoppingBag, Sun, Moon, Mic, Camera, PenLine,
@@ -963,16 +963,26 @@ function NotificationsPage() {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) => void }) {
+function SettingsPage({
+  dark,
+  setDark,
+  user,
+  onLogout,
+}: {
+  dark: boolean;
+  setDark: (v: boolean) => void;
+  user: AuthUser;
+  onLogout: () => void;
+}) {
   return (
     <div className="space-y-5 pb-20 md:pb-6">
       <h2 className="text-xl font-bold text-foreground">Настройки</h2>
       <div className="bg-card rounded-2xl border border-border p-5 flex gap-4 items-center">
-        <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center text-xl font-bold text-primary flex-shrink-0">АС</div>
+        <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center text-xl font-bold text-primary flex-shrink-0">{user.avatar}</div>
         <div>
-          <p className="font-bold text-card-foreground">Айдар Сейткали</p>
-          <p className="text-sm text-muted-foreground">aydarseitkali@mail.ru</p>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 mt-1 inline-block">Расширенный план</span>
+          <p className="font-bold text-card-foreground">{user.name}</p>
+          <p className="text-sm text-muted-foreground">{user.email}</p>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 mt-1 inline-block">{user.plan}</span>
         </div>
       </div>
 
@@ -1019,7 +1029,10 @@ function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) 
         ))}
       </div>
 
-      <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+      <button
+        onClick={onLogout}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      >
         <LogOut size={15} /> Выйти
       </button>
     </div>
@@ -1069,9 +1082,180 @@ function MarketplacePage() {
 // React is needed for JSX but imported implicitly via the transform
 declare namespace React { type ElementType = any; }
 
-export default function App() {
+type AuthUser = {
+  name: string;
+  email: string;
+  role: string;
+  plan: string;
+  avatar: string;
+};
+
+const DEMO_USER: AuthUser = {
+  name: "Айдар Сейткали",
+  email: "admin@carcontrol.kz",
+  role: "Администратор",
+  plan: "Расширенный план",
+  avatar: "АС",
+};
+
+const AUTH_KEY = "carcontrol-auth-user";
+
+function getStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(AUTH_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as AuthUser;
+    return parsed?.email ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [email, setEmail] = useState("admin@carcontrol.kz");
+  const [password, setPassword] = useState("123456");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+
+    window.setTimeout(() => {
+      const normalizedEmail = email.trim().toLowerCase();
+      const isValid = normalizedEmail === DEMO_USER.email && password === "123456";
+
+      if (!isValid) {
+        setError("Неверный email или пароль. Используйте demo-данные ниже.");
+        setLoading(false);
+        return;
+      }
+
+      onLogin(DEMO_USER);
+      setLoading(false);
+    }, 600);
+  };
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(63,125,232,0.18),_transparent_45%),linear-gradient(180deg,#eef4ff_0%,#f4f7fb_100%)] dark:bg-[radial-gradient(circle_at_top,_rgba(63,125,232,0.14),_transparent_35%),linear-gradient(180deg,#09131f_0%,#0b1725_100%)] px-4 py-8 sm:px-6">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
+        <div className="grid w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_24px_80px_rgba(15,23,42,0.12)] md:grid-cols-2">
+          <div className="hidden md:flex flex-col justify-between bg-primary p-8 text-primary-foreground">
+            <div>
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
+                  <Car size={22} />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/80">CarControl</p>
+                  <p className="text-xl font-bold">Личный кабинет</p>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <p className="text-sm text-primary-foreground/80">Управление гаражом</p>
+                  <h1 className="mt-2 text-4xl font-black leading-tight">Контроль авто, ТО, расходов и ИИ-подсказок.</h1>
+                </div>
+                <p className="max-w-md text-base text-primary-foreground/80">
+                  Следите за пробегом, расходами, рекомендациями и сервисной историей в одном месте.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 text-sm text-primary-foreground/85">
+              {[
+                "Гараж и состояние авто",
+                "ТО и история расходов",
+                "ИИ-рекомендации и напоминания",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/10 px-3 py-2.5">
+                  <CheckCircle size={18} className="text-white" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-8 lg:p-10">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Вход</p>
+                <h2 className="mt-2 text-2xl font-black text-foreground">Добро пожаловать</h2>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Shield size={20} />
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground">Email</label>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground">Пароль</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="h-4 w-4 rounded border-border" defaultChecked />
+                  Запомнить меня
+                </label>
+                <button type="button" className="font-semibold text-primary hover:text-primary/80">Забыли пароль?</button>
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "Входим…" : "Войти в кабинет"}
+              </button>
+            </form>
+
+            <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Демо-доступ</p>
+              <div className="space-y-2 text-sm text-foreground">
+                <p><span className="font-semibold">Email:</span> admin@carcontrol.kz</p>
+                <p><span className="font-semibold">Пароль:</span> 123456</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [dark, setDark] = useState(false);
-  const [page, setPage] = useState<Page>("cars");
+  const [page, setPage] = useState<Page>("dashboard");
   const [addOpen, setAddOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1118,7 +1302,7 @@ export default function App() {
             {page === "reports" && <ReportsPage />}
             {page === "references" && <ReferencesPage />}
             {page === "notifications" && <NotificationsPage />}
-            {page === "settings" && <SettingsPage dark={dark} setDark={setDark} />}
+            {page === "settings" && <SettingsPage dark={dark} setDark={setDark} user={user} onLogout={onLogout} />}
             {page === "marketplace" && <MarketplacePage />}
           </main>
         </div>
@@ -1137,4 +1321,29 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const storedUser = getStoredUser();
+    if (storedUser) setUser(storedUser);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (user) {
+      window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    } else {
+      window.localStorage.removeItem(AUTH_KEY);
+    }
+  }, [user]);
+
+  if (!user) {
+    return <AuthScreen onLogin={setUser} />;
+  }
+
+  return <AuthenticatedApp user={user} onLogout={() => setUser(null)} />;
 }
