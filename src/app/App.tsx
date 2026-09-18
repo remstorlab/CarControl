@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LandingPage from "./LandingPage";
 import {
   LayoutDashboard, Car, BookOpen, Sparkles, BarChart2, Library,
   Bell, Settings, ShoppingBag, Sun, Moon, Mic, Camera, PenLine,
@@ -1113,7 +1114,13 @@ function getStoredUser(): AuthUser | null {
   }
 }
 
-function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+function AuthScreen({
+  onLogin,
+  onBack,
+}: {
+  onLogin: (user: AuthUser) => void;
+  onBack: () => void;
+}) {
   const [email, setEmail] = useState("admin@carcontrol.kz");
   const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
@@ -1122,10 +1129,23 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+
+    if (!emailIsValid) {
+      setError("Введите корректный email адрес.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Пароль должен содержать минимум 6 символов.");
+      return;
+    }
+
     setLoading(true);
 
     window.setTimeout(() => {
-      const normalizedEmail = email.trim().toLowerCase();
       const isValid = normalizedEmail === DEMO_USER.email && password === "123456";
 
       if (!isValid) {
@@ -1145,6 +1165,15 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
         <div className="grid w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_24px_80px_rgba(15,23,42,0.12)] md:grid-cols-2">
           <div className="hidden md:flex flex-col justify-between bg-primary p-8 text-primary-foreground">
             <div>
+              <button
+                type="button"
+                onClick={onBack}
+                className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-primary-foreground/90 transition hover:bg-white/15"
+              >
+                <ChevronRight size={14} className="rotate-180" />
+                На главную
+              </button>
+
               <div className="mb-6 flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15">
                   <Car size={22} />
@@ -1325,10 +1354,14 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [screen, setScreen] = useState<"landing" | "auth" | "app">("landing");
 
   useEffect(() => {
     const storedUser = getStoredUser();
-    if (storedUser) setUser(storedUser);
+    if (storedUser) {
+      setUser(storedUser);
+      setScreen("app");
+    }
   }, []);
 
   useEffect(() => {
@@ -1336,14 +1369,19 @@ export default function App() {
 
     if (user) {
       window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+      setScreen("app");
     } else {
       window.localStorage.removeItem(AUTH_KEY);
     }
   }, [user]);
 
-  if (!user) {
-    return <AuthScreen onLogin={setUser} />;
+  if (screen === "landing") {
+    return <LandingPage onEnterCabinet={() => setScreen("auth")} />;
   }
 
-  return <AuthenticatedApp user={user} onLogout={() => setUser(null)} />;
+  if (screen === "auth") {
+    return <AuthScreen onLogin={setUser} onBack={() => setScreen("landing")} />;
+  }
+
+  return <AuthenticatedApp user={user as AuthUser} onLogout={() => { setUser(null); setScreen("landing"); }} />;
 }
