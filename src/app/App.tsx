@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import LandingPage from "./LandingPage";
 import {
+  changePassword,
+  getProfileByUserId,
   signInWithEmail,
   signOutFromSupabase,
   signUpWithEmail,
   supabase,
+  updateProfile,
+  uploadUserAvatar,
   validateEmail,
 } from "../lib/supabase";
 import {
@@ -381,13 +385,13 @@ function AiChat({ onClose }: { onClose: () => void }) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-function Dashboard({ onAdd }: { onAdd: () => void }) {
+function Dashboard({ userName, onAdd }: { userName: string; onAdd: () => void }) {
   return (
     <div className="space-y-5 pb-20 md:pb-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-2 rounded-2xl bg-primary p-5 text-primary-foreground flex flex-col gap-3">
           <p className="text-primary-foreground/70 text-sm">Гараж</p>
-          <h2 className="text-2xl font-bold">Айдар Сейткали</h2>
+          <h2 className="text-2xl font-bold">{userName}</h2>
           <div className="flex gap-4 text-sm text-primary-foreground/80 mt-auto">
             <span className="flex items-center gap-1.5"><Car size={14} />2 авто</span>
             <span className="flex items-center gap-1.5"><Activity size={14} />130 600 км</span>
@@ -1007,6 +1011,16 @@ function SettingsPage({
         </div>
       </div>
 
+      <div className="bg-card rounded-2xl border border-border p-5">
+        <h3 className="font-bold text-card-foreground">Безопасность</h3>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-password-modal'))}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent"
+        >
+          <Shield size={15} /> Сменить пароль
+        </button>
+      </div>
+
       <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
         <h3 className="font-bold text-card-foreground">Интеграции</h3>
         {([
@@ -1099,11 +1113,11 @@ type AuthUser = {
 };
 
 const DEMO_USER: AuthUser = {
-  name: "Айдар Сейткали",
-  email: "admin@carcontrol.kz",
-  role: "Администратор",
-  plan: "Расширенный план",
-  avatar: "АС",
+  name: "Пользователь",
+  email: "user@carcontrol.kz",
+  role: "Пользователь",
+  plan: "Base",
+  avatar: "П",
 };
 
 const AUTH_KEY = "carcontrol-auth-user";
@@ -1360,6 +1374,249 @@ function AuthScreen({
   );
 }
 
+function PasswordChangeModal({
+  onClose,
+}: {
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSubmit = async () => {
+    if (password.length < 6) {
+      setError("Пароль должен содержать минимум 6 символов.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Пароли не совпадают.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await changePassword(password);
+      setSuccess("Пароль успешно обновлён.");
+      setTimeout(() => onClose(), 1000);
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Не удалось сменить пароль.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-card-foreground">Смена пароля</h3>
+          <button onClick={onClose} className="rounded-lg p-2 hover:bg-accent"><X size={17} /></button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-semibold text-foreground">Новый пароль</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold text-foreground">Повторите пароль</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              className="mt-1 w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="••••••••"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+              {success}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent">Отмена</button>
+            <button onClick={handleSubmit} disabled={loading} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90 disabled:opacity-70">
+              {loading ? "Сохраняем…" : "Сохранить"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileEditModal({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: AuthUser;
+  onClose: () => void;
+  onSave: (updatedUser: AuthUser) => void;
+}) {
+  const [fullName, setFullName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [avatar, setAvatar] = useState(user.avatar.startsWith('http') ? user.avatar : user.avatar);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setAvatarFile(file);
+    setAvatar(URL.createObjectURL(file));
+  };
+
+  const handleSubmit = async () => {
+    const trimmedName = fullName.trim();
+    const trimmedEmail = email.trim();
+    let nextAvatar = avatar;
+
+    if (!trimmedName) {
+      setError("Укажите ФИО.");
+      return;
+    }
+
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setError("Введите корректный email.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      if (avatarFile) {
+        const uploadedUrl = await uploadUserAvatar(avatarFile);
+        nextAvatar = uploadedUrl;
+      }
+
+      const saved = await updateProfile({
+        full_name: trimmedName,
+        email: trimmedEmail,
+        avatar: nextAvatar,
+      });
+
+      const refreshedUser: AuthUser = {
+        name: saved?.full_name || trimmedName,
+        email: saved?.email || trimmedEmail,
+        role: user.role,
+        plan: user.plan,
+        avatar: (saved?.avatar || nextAvatar || trimmedName).toString().slice(0, 2).toUpperCase(),
+      };
+
+      onSave(refreshedUser);
+      onClose();
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Не удалось сохранить профиль.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-card-foreground">Редактировать профиль</h3>
+            <button onClick={onClose} className="rounded-lg p-2 hover:bg-accent"><X size={17} /></button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xl font-bold text-primary">
+                {avatar.startsWith('http') ? (
+                  <img src={avatar} alt="avatar" className="h-full w-full object-cover" />
+                ) : (
+                  avatar
+                )}
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Аватар</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="mt-1 w-full rounded-xl border border-border bg-input-background px-3 py-2 text-xs text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-2 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-foreground">ФИО</label>
+              <input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-foreground">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-input-background px-3.5 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPasswordModalOpen(true)}
+              className="w-full rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent"
+            >
+              Сменить пароль
+            </button>
+
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={onClose} className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent">Отмена</button>
+              <button onClick={handleSubmit} disabled={loading} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90 disabled:opacity-70">
+                {loading ? "Сохраняем…" : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {passwordModalOpen && <PasswordChangeModal onClose={() => setPasswordModalOpen(false)} />}
+    </>
+  );
+}
+
 function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [dark, setDark] = useState(false);
   const [page, setPage] = useState<Page>("dashboard");
@@ -1367,11 +1624,26 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser>(user);
 
   const titles: Record<Page, string> = {
     dashboard: "Дашборд", cars: "Гараж", journal: "Журнал",
     recommendations: "Рекомендации", reports: "Отчёты", references: "Справочники",
     notifications: "Уведомления", settings: "Настройки", marketplace: "Маркетплейс",
+  };
+
+  useEffect(() => {
+    setCurrentUser(user);
+  }, [user]);
+
+  const handleProfileSave = (updatedUser: AuthUser) => {
+    setCurrentUser(updatedUser);
+    const nextUser = { ...updatedUser, avatar: (updatedUser.avatar || updatedUser.name).slice(0, 2).toUpperCase() };
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
+    }
   };
 
   return (
@@ -1398,21 +1670,99 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
                   <Sparkles size={9} className="text-primary-foreground" />
                 </span>
               </button>
+
+              <div className="relative ml-1">
+                <button
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-muted/60 px-2.5 py-1.5 text-left hover:bg-accent transition-colors"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                    {currentUser.avatar}
+                  </div>
+                  <div className="hidden xl:block">
+                    <div className="text-sm font-semibold text-foreground">{currentUser.name}</div>
+                    <div className="text-[10px] text-muted-foreground">{currentUser.email}</div>
+                  </div>
+                  <ChevronDown size={14} className="text-muted-foreground" />
+                </button>
+
+                {profileMenuOpen && (
+                  <div className="absolute right-0 top-14 w-64 rounded-2xl border border-border bg-card p-2 shadow-xl z-30">
+                    <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-base font-bold text-primary">
+                        {currentUser.avatar}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-foreground">{currentUser.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{currentUser.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 space-y-1">
+                      <button
+                        onClick={() => { setProfileEditorOpen(true); setProfileMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground hover:bg-accent"
+                      >
+                        <Edit2 size={15} /> Редактировать профиль
+                      </button>
+
+                      <button
+                        onClick={() => { setPage("settings"); setProfileMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground hover:bg-accent"
+                      >
+                        <Settings size={15} /> Профиль и настройки
+                      </button>
+
+                      <button
+                        onClick={() => { setDark(!dark); setProfileMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground hover:bg-accent"
+                      >
+                        {dark ? <Sun size={15} /> : <Moon size={15} />} {dark ? "Светлая тема" : "Тёмная тема"}
+                      </button>
+
+                      <button
+                        onClick={() => { setPage("notifications"); setProfileMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground hover:bg-accent"
+                      >
+                        <Bell size={15} /> Уведомления
+                      </button>
+                    </div>
+
+                    <div className="my-2 border-t border-border" />
+
+                    <button
+                      onClick={() => { setProfileMenuOpen(false); onLogout(); }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    >
+                      <LogOut size={15} /> Выйти
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           <main className="flex-1 px-4 md:px-6 py-4 md:py-5 overflow-y-auto">
-            {page === "dashboard" && <Dashboard onAdd={() => setAddOpen(true)} />}
+            {page === "dashboard" && <Dashboard userName={currentUser.name} onAdd={() => setAddOpen(true)} />}
             {page === "cars" && <CarsPage />}
             {page === "journal" && <JournalPage onAdd={() => setAddOpen(true)} />}
             {page === "recommendations" && <RecommendationsPage />}
             {page === "reports" && <ReportsPage />}
             {page === "references" && <ReferencesPage />}
             {page === "notifications" && <NotificationsPage />}
-            {page === "settings" && <SettingsPage dark={dark} setDark={setDark} user={user} onLogout={onLogout} />}
+            {page === "settings" && <SettingsPage dark={dark} setDark={setDark} user={currentUser} onLogout={onLogout} />}
             {page === "marketplace" && <MarketplacePage />}
           </main>
         </div>
+
+        {profileEditorOpen && (
+          <ProfileEditModal user={currentUser} onClose={() => setProfileEditorOpen(false)} onSave={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem(AUTH_KEY, JSON.stringify(updatedUser));
+            }
+          }} />
+        )}
 
         <div className="md:hidden fixed right-4 bottom-20 z-40 flex flex-col items-end gap-2">
           <button onClick={() => setChatOpen(!chatOpen)} className="w-11 h-11 bg-primary rounded-full flex items-center justify-center shadow-lg hover:opacity-90">
@@ -1434,13 +1784,38 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [screen, setScreen] = useState<"landing" | "auth" | "app">("landing");
 
-  const mapSupabaseUser = (supabaseUser: { email?: string | null; user_metadata?: { full_name?: string | null; name?: string | null } | null }) => ({
+  const mapSupabaseUser = (supabaseUser: { id?: string | null; email?: string | null; user_metadata?: { full_name?: string | null; name?: string | null } | null }) => ({
     name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email?.split("@")[0] || "Пользователь",
     email: supabaseUser.email || "",
     role: "Пользователь",
     plan: "Base",
     avatar: (supabaseUser.user_metadata?.full_name || supabaseUser.email || "U").slice(0, 2).toUpperCase(),
   });
+
+  const hydrateUserFromSupabase = async (supabaseUser: { id?: string | null; email?: string | null; user_metadata?: { full_name?: string | null; name?: string | null } | null }) => {
+    const baseUser = mapSupabaseUser(supabaseUser);
+
+    if (!supabase || !supabaseUser.id) {
+      return baseUser;
+    }
+
+    try {
+      const profile = await getProfileByUserId(supabaseUser.id);
+      if (profile?.full_name) {
+        baseUser.name = profile.full_name.trim() || baseUser.name;
+      }
+      if (profile?.email) {
+        baseUser.email = profile.email;
+      }
+      if (profile?.avatar) {
+        baseUser.avatar = profile.avatar.trim().slice(0, 2).toUpperCase() || baseUser.avatar;
+      }
+    } catch (error) {
+      console.warn("Unable to fetch profile from Supabase:", error);
+    }
+
+    return baseUser;
+  };
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -1455,17 +1830,19 @@ export default function App() {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       const currentUser = data.session?.user;
       if (currentUser) {
-        setUser(mapSupabaseUser(currentUser));
+        const hydratedUser = await hydrateUserFromSupabase(currentUser);
+        setUser(hydratedUser);
         setScreen("app");
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
+        const hydratedUser = await hydrateUserFromSupabase(session.user);
+        setUser(hydratedUser);
         setScreen("app");
       } else {
         setUser(null);

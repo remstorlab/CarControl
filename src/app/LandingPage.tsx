@@ -84,7 +84,7 @@ export default function LandingPage({
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-slate-400">Гараж</p>
-                    <p className="text-lg font-bold text-white">Айдар Сейткали</p>
+                    <p className="text-lg font-bold text-white">Ваш профиль</p>
                   </div>
                   <div className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-300">Всё в порядке</div>
                 </div>
