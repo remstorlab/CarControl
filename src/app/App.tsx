@@ -1359,14 +1359,6 @@ function AuthScreen({
                 {loading ? (mode === "login" ? "Входим…" : "Создаём аккаунт…") : mode === "login" ? "Войти в кабинет" : "Создать аккаунт"}
               </button>
             </form>
-
-            <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/40 p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Подключение к Supabase</p>
-              <div className="space-y-2 text-sm text-foreground">
-                <p>После регистрации пользователь создается в Auth и profile.</p>
-                <p>Используется email validation и secure auth flow.</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
